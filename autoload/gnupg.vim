@@ -13,6 +13,9 @@
 
 let s:GPGMagicString = "\t \t"
 let s:keyPattern = '\%(0x\)\=[[:xdigit:]]\{8,16}'
+let s:minStartPad=1024
+let s:maxStartPad=2048
+let s:minEndPad=512
 
 " Section: Functions {{{1
 
@@ -1212,6 +1215,67 @@ function s:GPGExecute(dict)
   call s:GPGPostCmd()
 
   call s:GPGDebug(a:dict.level, "rc: ". v:shell_error)
+endfunction
+
+" Function: gnupg#pad_random() {{{2
+"
+" Add random padding to the beginning and end of the buffer.
+"
+function gnupg#pad_random()
+  execute "normal! ggO"
+  execute "normal! Go"
+  call s:GPGReplacePadRandom()
+endfunction
+
+" Function: gnupg#repad_random() {{{2
+"
+" Check if the beginning and end of buffer have something looking like
+" random padding and if so, replace it by new padding.
+"
+function gnupg#repad_random()
+  let startlen = strlen(getline(1))
+  let endlen = strlen(getline(line('$')))
+  if (startlen < s:minStartPad || startlen > s:maxStartPad
+    \ || match(getline(1), " ") > 0)
+    echohl WarningMsg | echom "Padding not found at the beginning of file."
+    echohl None
+    sleep 2000m
+    return
+  endif
+  if (endlen < s:minEndPad || match(getline(line('$')), " ") > 0)
+    echohl WarningMsg | echom "Padding not found at the end of file."
+    echohl None
+    sleep 2000m
+    return
+  endif
+  call s:GPGReplacePadRandom()
+endfunction
+
+" Function: s:GPGReplacePadRandom() {{{2
+"
+" Replace the first and last lines of the buffer with a random string.
+" The string lenghts are such that the file length will become approximately
+" a multiple of blocksize, 4096 bytes.
+"
+function s:GPGReplacePadRandom()
+  let blocksize = 4096
+  let random = system('bash -c "echo -n $RANDOM"')
+  let maxran = 32767 " Maximum value of $RANDOM from bash
+
+  let startjunklen=s:minStartPad+((s:maxStartPad - s:minStartPad)*random)/maxran
+  let contlen=strlen(join(getline(2,line('$')-1)))
+  let filelen=(((startjunklen + contlen + s:minEndPad)/blocksize)+1)*blocksize
+  let endjunklen=filelen-(startjunklen+contlen)
+  let curline=line('.')
+
+  execute 'set nofoldenable'
+  execute '1!head -c'.startjunklen.' /dev/urandom | base64 | tr --delete ''\n='' | head -c '.startjunklen
+  execute '$!head -c'.endjunklen.' /dev/urandom | base64 | tr --delete ''\n='' | head -c '.endjunklen
+  " Vim has teh bugs: The extra cat is needed so that the whole file is
+  " filtered when calling GPGRePadRandom in BufWriteCmd autocmd.
+  execute '%!cat'
+  execute 'set foldenable'
+  execute curline
 endfunction
 
 " Function: s:GPGDebug(level, text) {{{2
