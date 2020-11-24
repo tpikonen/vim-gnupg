@@ -1237,15 +1237,15 @@ function gnupg#repad_random()
   let endlen = strlen(getline(line('$')))
   if (startlen < s:minStartPad || startlen > s:maxStartPad
     \ || match(getline(1), " ") > 0)
-    echohl WarningMsg | echom "Padding not found at the beginning of file."
+    echohl WarningMsg
+    let dump = input("Padding not found at the beginning of file. (Press ENTER)")
     echohl None
-    sleep 2000m
     return
   endif
   if (endlen < s:minEndPad || match(getline(line('$')), " ") > 0)
-    echohl WarningMsg | echom "Padding not found at the end of file."
+    echohl WarningMsg
+    let dump = input("Padding not found at the end of file. (Press ENTER)")
     echohl None
-    sleep 2000m
     return
   endif
   call s:GPGReplacePadRandom()
